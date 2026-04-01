@@ -260,8 +260,7 @@ const msalConfig = {
 const msalInstance = new msal.PublicClientApplication(msalConfig);
 const SCOPES = ["Mail.Read", "Mail.Send"];
 
-const params     = new URLSearchParams(window.location.search);
-const targetEmail = (params.get("email") || "").trim();
+let targetEmail  = "";
 
 let allMails     = [];
 let currentPage  = 1;
@@ -272,7 +271,21 @@ let sortAsc      = false;
 
 async function init() {
   await msalInstance.initialize();
-  await msalInstance.handleRedirectPromise();
+
+  try {
+    const response = await msalInstance.handleRedirectPromise();
+    if (response && response.account) {
+      msalInstance.setActiveAccount(response.account);
+    }
+  } catch (e) {
+    console.error("Redirect error:", e);
+  }
+
+  // E-Mail aus URL oder SessionStorage wiederherstellen
+  const urlEmail = new URLSearchParams(window.location.search).get("email") || "";
+  if (urlEmail) sessionStorage.setItem("targetEmail", urlEmail);
+  targetEmail = sessionStorage.getItem("targetEmail") || urlEmail;
+
   const account = msalInstance.getAllAccounts()[0];
   if (account) {
     msalInstance.setActiveAccount(account);
@@ -284,18 +297,16 @@ async function init() {
 }
 
 async function login() {
-  try {
-    await msalInstance.loginPopup({ scopes: SCOPES, redirectUri: "https://hofai650.github.io/mailsuche/blank.html" });
-    showMain();
-    await loadMails();
-  } catch (e) {
-    showError("Login fehlgeschlagen: " + e.message);
-  }
+  // E-Mail vor Redirect speichern
+  const urlEmail = new URLSearchParams(window.location.search).get("email") || "";
+  if (urlEmail) sessionStorage.setItem("targetEmail", urlEmail);
+
+  await msalInstance.loginRedirect({ scopes: SCOPES });
 }
 
 function logout() {
-  msalInstance.logoutPopup();
-  showLogin();
+  sessionStorage.removeItem("targetEmail");
+  msalInstance.logoutRedirect();
 }
 
 async function getToken() {
