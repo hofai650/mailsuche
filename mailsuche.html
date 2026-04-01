@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mail Suche</title>
+  <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #f3f2f1;
+      color: #323130;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #0078d4;
+      color: white;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+
+    header h1 { font-size: 18px; font-weight: 600; }
+
+    #app { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+
+    .card {
+      background: white;
+      border-radius: 6px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .email-badge {
+      background: #e1effa;
+      color: #005a9e;
+      border-radius: 4px;
+      padding: 6px 14px;
+      font-weight: 600;
+      font-size: 15px;
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .btn {
+      padding: 8px 18px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+
+    .btn-primary { background: #0078d4; color: white; }
+    .btn-primary:hover { background: #106ebe; }
+    .btn-primary:disabled { background: #a9d2f0; cursor: default; }
+
+    .btn-secondary { background: white; color: #0078d4; border: 1.5px solid #0078d4; }
+    .btn-secondary:hover { background: #e1effa; }
+
+    .btn-compose { background: #107c10; color: white; }
+    .btn-compose:hover { background: #0e6b0e; }
+
+    .status-bar {
+      font-size: 13px;
+      color: #605e5c;
+      padding: 6px 0;
+    }
+
+    .status-bar .count { font-weight: 600; color: #323130; }
+
+    #login-area {
+      text-align: center;
+      padding: 48px 24px;
+    }
+    #login-area p { margin-bottom: 20px; color: #605e5c; }
+
+    /* Table */
+    .table-wrap { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    thead th {
+      background: #f3f2f1;
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #323130;
+      border-bottom: 2px solid #edebe9;
+      white-space: nowrap;
+    }
+
+    thead th.sortable { cursor: pointer; user-select: none; }
+    thead th.sortable:hover { background: #edebe9; }
+    thead th.sorted { color: #0078d4; }
+    thead th .sort-icon { margin-left: 4px; font-size: 11px; }
+
+    tbody tr { border-bottom: 1px solid #edebe9; transition: background 0.1s; }
+    tbody tr:hover { background: #f3f2f1; }
+    tbody tr.unread td { font-weight: 600; }
+
+    td { padding: 10px 12px; vertical-align: top; }
+
+    td.col-date { white-space: nowrap; color: #605e5c; font-size: 13px; min-width: 120px; }
+    td.col-dir { text-align: center; min-width: 36px; }
+    td.col-from { min-width: 160px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    td.col-subject { min-width: 200px; }
+    td.col-preview { color: #605e5c; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+    td.col-action { text-align: center; white-space: nowrap; }
+
+    .dir-badge {
+      display: inline-block;
+      border-radius: 3px;
+      padding: 2px 6px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+    .dir-in  { background: #dff6dd; color: #107c10; }
+    .dir-out { background: #fff4ce; color: #7d5c00; }
+
+    .link-btn {
+      background: none;
+      border: none;
+      color: #0078d4;
+      cursor: pointer;
+      font-size: 13px;
+      text-decoration: underline;
+      padding: 0;
+    }
+    .link-btn:hover { color: #004578; }
+
+    .spinner {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 3px solid #c7e0f4;
+      border-top-color: #0078d4;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .empty { text-align: center; color: #605e5c; padding: 40px; }
+
+    .error-box {
+      background: #fde7e9;
+      color: #a4262c;
+      border-radius: 4px;
+      padding: 14px 18px;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+
+    #pagination { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 12px; }
+    #pagination span { font-size: 13px; color: #605e5c; }
+  </style>
+</head>
+<body>
+
+<header>
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="4" width="20" height="16" rx="2" stroke="white" stroke-width="1.8"/>
+    <path d="M2 7L12 13L22 7" stroke="white" stroke-width="1.8"/>
+  </svg>
+  <h1>Mail Suche</h1>
+</header>
+
+<div id="app">
+
+  <!-- Login -->
+  <div id="login-area" class="card" style="display:none;">
+    <p>Bitte mit deinem Microsoft-Konto anmelden, um Mails zu laden.</p>
+    <button class="btn btn-primary" onclick="login()">Mit Microsoft anmelden</button>
+  </div>
+
+  <!-- Hauptbereich -->
+  <div id="main-area" style="display:none;">
+    <div class="card">
+      <div class="toolbar">
+        <div class="email-badge" id="email-display"></div>
+        <button class="btn btn-compose" id="btn-compose" onclick="composeMail()">+ Neues Mail</button>
+        <button class="btn btn-secondary" onclick="loadMails()">Aktualisieren</button>
+        <button class="btn btn-secondary btn-sm" onclick="logout()" style="font-size:12px;padding:6px 10px;">Abmelden</button>
+      </div>
+      <div class="status-bar" id="status-bar"></div>
+      <div id="error-area"></div>
+    </div>
+
+    <div class="card">
+      <div class="table-wrap">
+        <table id="mail-table">
+          <thead>
+            <tr>
+              <th class="sortable sorted" onclick="sortBy('date')" id="th-date">
+                Datum <span class="sort-icon">&#9660;</span>
+              </th>
+              <th>Richtung</th>
+              <th>Von / An</th>
+              <th>Betreff</th>
+              <th>Vorschau</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="mail-body">
+          </tbody>
+        </table>
+        <div class="empty" id="empty-hint" style="display:none;">Keine Mails gefunden.</div>
+      </div>
+      <div id="pagination"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+//  KONFIGURATION — hier anpassen
+// ============================================================
+const CLIENT_ID  = "f0b3d585-9fa4-43e0-a8e6-4e9cb59fbf52";
+const TENANT_ID  = "4f2ac25c-9e00-4488-b96f-9c9e5845b73d";
+const PAGE_SIZE  = 50;                          // Mails pro Seite
+// ============================================================
+
+const REDIRECT_URI = window.location.origin + window.location.pathname;
+
+const msalConfig = {
+  auth: {
+    clientId: CLIENT_ID,
+    authority: `https://login.microsoftonline.com/${TENANT_ID}`,
+    redirectUri: REDIRECT_URI,
+  },
+  cache: { cacheLocation: "sessionStorage" }
+};
+
+const msalInstance = new msal.PublicClientApplication(msalConfig);
+const SCOPES = ["Mail.Read", "Mail.Send"];
+
+const params     = new URLSearchParams(window.location.search);
+const targetEmail = (params.get("email") || "").trim();
+
+let allMails     = [];
+let currentPage  = 1;
+let sortField    = "date";
+let sortAsc      = false;
+
+// -------- Auth --------
+
+async function init() {
+  await msalInstance.initialize();
+  await msalInstance.handleRedirectPromise();
+  const account = msalInstance.getAllAccounts()[0];
+  if (account) {
+    msalInstance.setActiveAccount(account);
+    showMain();
+    await loadMails();
+  } else {
+    showLogin();
+  }
+}
+
+async function login() {
+  try {
+    await msalInstance.loginPopup({ scopes: SCOPES });
+    showMain();
+    await loadMails();
+  } catch (e) {
+    showError("Login fehlgeschlagen: " + e.message);
+  }
+}
+
+function logout() {
+  msalInstance.logoutPopup();
+  showLogin();
+}
+
+async function getToken() {
+  const account = msalInstance.getActiveAccount()
+    || msalInstance.getAllAccounts()[0];
+  if (!account) throw new Error("Nicht angemeldet");
+  const result = await msalInstance.acquireTokenSilent({
+    scopes: SCOPES,
+    account
+  });
+  return result.accessToken;
+}
+
+// -------- Load Mails --------
+
+async function loadMails() {
+  if (!targetEmail) {
+    showError("Keine E-Mail-Adresse in der URL angegeben (?email=...)");
+    return;
+  }
+
+  setStatus('<span class="spinner"></span> Mails werden geladen...');
+  clearError();
+  allMails = [];
+  renderTable();
+
+  try {
+    const token = await getToken();
+
+    // Suche in ALLEN Ordnern (Posteingang + Gesendet + alle anderen)
+    // Graph $search mit KQL
+    const query = encodeURIComponent(`"${targetEmail}"`);
+    const url = `https://graph.microsoft.com/v1.0/me/messages` +
+      `?$search=${query}` +
+      `&$select=subject,from,toRecipients,receivedDateTime,bodyPreview,webLink,isRead` +
+      `&$top=200`;
+
+    const res = await fetch(url, {
+      headers: { Authorization: "Bearer " + token }
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error?.message || res.statusText);
+    }
+
+    const data = await res.json();
+    allMails = data.value || [];
+
+    // Lade nächste Seiten falls vorhanden
+    let nextLink = data["@odata.nextLink"];
+    while (nextLink && allMails.length < 1000) {
+      const r2 = await fetch(nextLink, { headers: { Authorization: "Bearer " + token } });
+      const d2 = await r2.json();
+      allMails = allMails.concat(d2.value || []);
+      nextLink = d2["@odata.nextLink"];
+    }
+
+    sortMails();
+    currentPage = 1;
+    renderTable();
+    setStatus(`<span class="count">${allMails.length}</span> Mails gefunden für <strong>${escHtml(targetEmail)}</strong>`);
+
+  } catch (e) {
+    showError("Fehler beim Laden: " + e.message);
+    setStatus("");
+  }
+}
+
+// -------- Sort --------
+
+function sortBy(field) {
+  if (sortField === field) {
+    sortAsc = !sortAsc;
+  } else {
+    sortField = field;
+    sortAsc = field !== "date"; // Datum: standardmäßig absteigend
+  }
+  sortMails();
+  currentPage = 1;
+  renderTable();
+  updateSortHeaders();
+}
+
+function sortMails() {
+  allMails.sort((a, b) => {
+    let va, vb;
+    if (sortField === "date") {
+      va = new Date(a.receivedDateTime).getTime();
+      vb = new Date(b.receivedDateTime).getTime();
+    } else if (sortField === "from") {
+      va = (a.from?.emailAddress?.name || a.from?.emailAddress?.address || "").toLowerCase();
+      vb = (b.from?.emailAddress?.name || b.from?.emailAddress?.address || "").toLowerCase();
+    } else {
+      va = (a.subject || "").toLowerCase();
+      vb = (b.subject || "").toLowerCase();
+    }
+    if (va < vb) return sortAsc ? -1 : 1;
+    if (va > vb) return sortAsc ? 1 : -1;
+    return 0;
+  });
+}
+
+function updateSortHeaders() {
+  ["date","from","subject"].forEach(f => {
+    const th = document.getElementById("th-" + f);
+    if (!th) return;
+    th.classList.toggle("sorted", sortField === f);
+    const icon = th.querySelector(".sort-icon");
+    if (icon) icon.innerHTML = sortAsc ? "&#9650;" : "&#9660;";
+  });
+}
+
+// -------- Render --------
+
+function renderTable() {
+  const tbody = document.getElementById("mail-body");
+  const empty = document.getElementById("empty-hint");
+  const myEmail = (msalInstance.getActiveAccount()?.username || "").toLowerCase();
+
+  if (allMails.length === 0) {
+    tbody.innerHTML = "";
+    empty.style.display = "";
+    renderPagination(0);
+    return;
+  }
+  empty.style.display = "none";
+
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const page  = allMails.slice(start, start + PAGE_SIZE);
+
+  tbody.innerHTML = page.map(mail => {
+    const fromAddr = (mail.from?.emailAddress?.address || "").toLowerCase();
+    const isOutgoing = fromAddr === myEmail;
+    const dirLabel = isOutgoing
+      ? '<span class="dir-badge dir-out">Gesendet</span>'
+      : '<span class="dir-badge dir-in">Eingang</span>';
+
+    const fromDisplay = isOutgoing
+      ? (mail.toRecipients?.[0]?.emailAddress?.name
+         || mail.toRecipients?.[0]?.emailAddress?.address
+         || "—")
+      : (mail.from?.emailAddress?.name
+         || mail.from?.emailAddress?.address
+         || "—");
+
+    const date = formatDate(mail.receivedDateTime);
+    const subject = escHtml(mail.subject || "(kein Betreff)");
+    const preview = escHtml((mail.bodyPreview || "").substring(0, 120));
+    const webLink = mail.webLink || "#";
+    const unread = !mail.isRead && !isOutgoing;
+
+    return `<tr class="${unread ? "unread" : ""}">
+      <td class="col-date">${date}</td>
+      <td class="col-dir">${dirLabel}</td>
+      <td class="col-from" title="${escHtml(fromDisplay)}">${escHtml(fromDisplay)}</td>
+      <td class="col-subject"><a href="${escHtml(webLink)}" target="_blank" style="color:inherit;text-decoration:none;">${subject}</a></td>
+      <td class="col-preview">${preview}</td>
+      <td class="col-action">
+        <a href="${escHtml(webLink)}" target="_blank" class="link-btn">Öffnen</a>
+      </td>
+    </tr>`;
+  }).join("");
+
+  renderPagination(allMails.length);
+}
+
+function renderPagination(total) {
+  const pg = document.getElementById("pagination");
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  if (totalPages <= 1) { pg.innerHTML = ""; return; }
+
+  pg.innerHTML = `
+    <span>Seite ${currentPage} von ${totalPages}</span>
+    <button class="btn btn-secondary" onclick="goPage(${currentPage - 1})" ${currentPage <= 1 ? "disabled" : ""}>&#8592; Zurück</button>
+    <button class="btn btn-secondary" onclick="goPage(${currentPage + 1})" ${currentPage >= totalPages ? "disabled" : ""}>Weiter &#8594;</button>
+  `;
+}
+
+function goPage(p) {
+  const totalPages = Math.ceil(allMails.length / PAGE_SIZE);
+  if (p < 1 || p > totalPages) return;
+  currentPage = p;
+  renderTable();
+  document.getElementById("mail-table").scrollIntoView({ behavior: "smooth" });
+}
+
+// -------- Compose --------
+
+function composeMail() {
+  const url = "https://outlook.office.com/mail/deeplink/compose?to=" + encodeURIComponent(targetEmail);
+  window.open(url, "_blank");
+}
+
+// -------- UI Helpers --------
+
+function showLogin() {
+  document.getElementById("login-area").style.display = "";
+  document.getElementById("main-area").style.display  = "none";
+}
+
+function showMain() {
+  document.getElementById("login-area").style.display = "none";
+  document.getElementById("main-area").style.display  = "";
+  document.getElementById("email-display").textContent = targetEmail || "—";
+}
+
+function setStatus(html) {
+  document.getElementById("status-bar").innerHTML = html;
+}
+
+function showError(msg) {
+  document.getElementById("error-area").innerHTML =
+    `<div class="error-box">${escHtml(msg)}</div>`;
+}
+
+function clearError() {
+  document.getElementById("error-area").innerHTML = "";
+}
+
+function formatDate(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const today = new Date();
+  const isToday = d.toDateString() === today.toDateString();
+  if (isToday) {
+    return d.toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" });
+  }
+  return d.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" })
+    + " " + d.toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" });
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// -------- Start --------
+init();
+</script>
+</body>
+</html>
