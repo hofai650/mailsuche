@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
+</head>
+<body>
+  <script>
+    const msalInstance = new msal.PublicClientApplication({
+      auth: {
+        clientId: "f0b3d585-9fa4-43e0-a8e6-4e9cb59fbf52",
+        authority: "https://login.microsoftonline.com/4f2ac25c-9e00-4488-b96f-9c9e5845b73d",
+        redirectUri: "https://hofai650.github.io/mailsuche/blank.html"
+      }
+    });
+    msalInstance.initialize().then(() => msalInstance.handleRedirectPromise());
+  </script>
+</body>
+</html>

@@ -285,7 +285,7 @@ async function init() {
 
 async function login() {
   try {
-    await msalInstance.loginPopup({ scopes: SCOPES });
+    await msalInstance.loginPopup({ scopes: SCOPES, redirectUri: "https://hofai650.github.io/mailsuche/blank.html" });
     showMain();
     await loadMails();
   } catch (e) {
